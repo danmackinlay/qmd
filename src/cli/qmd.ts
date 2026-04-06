@@ -861,13 +861,13 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
       process.exit(1);
     }
 
-    // Try exact match on collection + path
+    // Try exact match on collection + path (handelize'd or original)
     doc = db.prepare(`
       SELECT d.collection as collectionName, d.path, content.doc as body
       FROM documents d
       JOIN content ON content.hash = d.hash
-      WHERE d.collection = ? AND d.path = ? AND d.active = 1
-    `).get(parsed.collectionName, parsed.path) as typeof doc;
+      WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+    `).get(parsed.collectionName, parsed.path, parsed.path) as typeof doc;
 
     if (!doc) {
       // Try fuzzy match by path ending
@@ -875,9 +875,9 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
         SELECT d.collection as collectionName, d.path, content.doc as body
         FROM documents d
         JOIN content ON content.hash = d.hash
-        WHERE d.collection = ? AND d.path LIKE ? AND d.active = 1
+        WHERE d.collection = ? AND (d.path LIKE ? OR d.source_path LIKE ?) AND d.active = 1
         LIMIT 1
-      `).get(parsed.collectionName, `%${parsed.path}`) as typeof doc;
+      `).get(parsed.collectionName, `%${parsed.path}`, `%${parsed.path}`) as typeof doc;
     }
 
     virtualPath = inputPath;
@@ -896,13 +896,13 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
         `).get(possibleCollection) : null;
 
         if (collExists) {
-          // Try exact match on collection + path
+          // Try exact match on collection + path (handelize'd or original)
           doc = db.prepare(`
             SELECT d.collection as collectionName, d.path, content.doc as body
             FROM documents d
             JOIN content ON content.hash = d.hash
-            WHERE d.collection = ? AND d.path = ? AND d.active = 1
-          `).get(possibleCollection || "", possiblePath || "") as { collectionName: string; path: string; body: string } | null;
+            WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+          `).get(possibleCollection || "", possiblePath || "", possiblePath || "") as { collectionName: string; path: string; body: string } | null;
 
           if (!doc) {
             // Try fuzzy match by path ending
@@ -910,9 +910,9 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
               SELECT d.collection as collectionName, d.path, content.doc as body
               FROM documents d
               JOIN content ON content.hash = d.hash
-              WHERE d.collection = ? AND d.path LIKE ? AND d.active = 1
+              WHERE d.collection = ? AND (d.path LIKE ? OR d.source_path LIKE ?) AND d.active = 1
               LIMIT 1
-            `).get(possibleCollection || "", `%${possiblePath}`) as { collectionName: string; path: string; body: string } | null;
+            `).get(possibleCollection || "", `%${possiblePath}`, `%${possiblePath}`) as { collectionName: string; path: string; body: string } | null;
           }
 
           if (doc) {
@@ -940,13 +940,13 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
       const detected = detectCollectionFromPath(db, fsPath);
 
       if (detected) {
-        // Found collection - query by collection name + relative path
+        // Found collection - query by collection name + relative path (handelize'd or original)
         doc = db.prepare(`
           SELECT d.collection as collectionName, d.path, content.doc as body
           FROM documents d
           JOIN content ON content.hash = d.hash
-          WHERE d.collection = ? AND d.path = ? AND d.active = 1
-        `).get(detected.collectionName, detected.relativePath) as { collectionName: string; path: string; body: string } | null;
+          WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+        `).get(detected.collectionName, detected.relativePath, detected.relativePath) as { collectionName: string; path: string; body: string } | null;
       }
 
       // Fuzzy match by filename (last component of path)
@@ -956,9 +956,9 @@ function getDocument(filename: string, fromLine?: number, maxLines?: number, lin
           SELECT d.collection as collectionName, d.path, content.doc as body
           FROM documents d
           JOIN content ON content.hash = d.hash
-          WHERE d.path LIKE ? AND d.active = 1
+          WHERE (d.path LIKE ? OR d.source_path LIKE ?) AND d.active = 1
           LIMIT 1
-        `).get(`%${filename}`) as { collectionName: string; path: string; body: string } | null;
+        `).get(`%${filename}`, `%${filename}`) as { collectionName: string; path: string; body: string } | null;
       }
 
       if (doc) {
@@ -1023,7 +1023,7 @@ function multiGet(pattern: string, maxLines?: number, maxBytes: number = DEFAULT
       if (isVirtualPath(name)) {
         const parsed = parseVirtualPath(name);
         if (parsed) {
-          // Try exact match on collection + path
+          // Try exact match on collection + path (handelize'd or original)
           doc = db.prepare(`
             SELECT
               'qmd://' || d.collection || '/' || d.path as virtual_path,
@@ -1032,11 +1032,11 @@ function multiGet(pattern: string, maxLines?: number, maxBytes: number = DEFAULT
               d.path
             FROM documents d
             JOIN content ON content.hash = d.hash
-            WHERE d.collection = ? AND d.path = ? AND d.active = 1
-          `).get(parsed.collectionName, parsed.path) as typeof doc;
+            WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+          `).get(parsed.collectionName, parsed.path, parsed.path) as typeof doc;
         }
       } else {
-        // Try exact match on path
+        // Try exact match on path (handelize'd or original)
         doc = db.prepare(`
           SELECT
             'qmd://' || d.collection || '/' || d.path as virtual_path,
@@ -1045,9 +1045,9 @@ function multiGet(pattern: string, maxLines?: number, maxBytes: number = DEFAULT
             d.path
           FROM documents d
           JOIN content ON content.hash = d.hash
-          WHERE d.path = ? AND d.active = 1
+          WHERE (d.path = ? OR d.source_path = ?) AND d.active = 1
           LIMIT 1
-        `).get(name) as { virtual_path: string; body_length: number; collection: string; path: string } | null;
+        `).get(name, name) as { virtual_path: string; body_length: number; collection: string; path: string } | null;
 
         // Try suffix match
         if (!doc) {
@@ -1059,9 +1059,9 @@ function multiGet(pattern: string, maxLines?: number, maxBytes: number = DEFAULT
               d.path
             FROM documents d
             JOIN content ON content.hash = d.hash
-            WHERE d.path LIKE ? AND d.active = 1
+            WHERE (d.path LIKE ? OR d.source_path LIKE ?) AND d.active = 1
             LIMIT 1
-          `).get(`%${name}`) as { virtual_path: string; body_length: number; collection: string; path: string } | null;
+          `).get(`%${name}`, `%${name}`) as { virtual_path: string; body_length: number; collection: string; path: string } | null;
         }
       }
 

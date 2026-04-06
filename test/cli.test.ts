@@ -1603,5 +1603,29 @@ describe("source_path end-to-end", () => {
     );
     expect(get.exitCode).toBe(0);
     expect(get.stdout).toContain("Bootstrap particle filter");
+
+    // get by original filename (source_path) should also resolve
+    const getOriginal = await runQmd(
+      ["get", "particle_filters.qmd"],
+      { dbPath, configDir, cwd: collectionDir }
+    );
+    expect(getOriginal.exitCode).toBe(0);
+    expect(getOriginal.stdout).toContain("Bootstrap particle filter");
+
+    // get by source_path-based virtual path (as shown in ls output)
+    const getSourceVirtual = await runQmd(
+      ["get", "qmd://testcol/particle_filters.qmd"],
+      { dbPath, configDir }
+    );
+    expect(getSourceVirtual.exitCode).toBe(0);
+    expect(getSourceVirtual.stdout).toContain("Bootstrap particle filter");
+
+    // get by collection/source_path format
+    const getCollPath = await runQmd(
+      ["get", "testcol/particle_filters.qmd"],
+      { dbPath, configDir }
+    );
+    expect(getCollPath.exitCode).toBe(0);
+    expect(getCollPath.stdout).toContain("Bootstrap particle filter");
   });
 });
