@@ -1131,8 +1131,8 @@ function multiGet(pattern: string, maxLines?: number, maxBytes: number = DEFAULT
       SELECT content.doc as body, d.title
       FROM documents d
       JOIN content ON content.hash = d.hash
-      WHERE d.collection = ? AND d.path = ? AND d.active = 1
-    `).get(collection, path) as { body: string; title: string } | null;
+      WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+    `).get(collection, path, path) as { body: string; title: string } | null;
 
     if (!doc) continue;
 

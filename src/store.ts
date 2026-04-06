@@ -3523,14 +3523,15 @@ export function getDocumentBody(db: Database, doc: DocumentResult | { filepath: 
   // Try to resolve document by filepath (absolute or virtual)
   let row: { body: string } | null = null;
 
-  // Try virtual path first
+  // Try virtual path first (handelize'd or original)
   if (filepath.startsWith('qmd://')) {
     row = db.prepare(`
       SELECT content.doc as body
       FROM documents d
       JOIN content ON content.hash = d.hash
-      WHERE 'qmd://' || d.collection || '/' || d.path = ? AND d.active = 1
-    `).get(filepath) as { body: string } | null;
+      WHERE ('qmd://' || d.collection || '/' || d.path = ?
+          OR 'qmd://' || d.collection || '/' || d.source_path = ?) AND d.active = 1
+    `).get(filepath, filepath) as { body: string } | null;
   }
 
   // Try absolute path by looking up in DB store_collections
@@ -3543,8 +3544,8 @@ export function getDocumentBody(db: Database, doc: DocumentResult | { filepath: 
           SELECT content.doc as body
           FROM documents d
           JOIN content ON content.hash = d.hash
-          WHERE d.collection = ? AND d.path = ? AND d.active = 1
-        `).get(coll.name, relativePath) as { body: string } | null;
+          WHERE d.collection = ? AND (d.path = ? OR d.source_path = ?) AND d.active = 1
+        `).get(coll.name, relativePath, relativePath) as { body: string } | null;
         if (row) break;
       }
     }
