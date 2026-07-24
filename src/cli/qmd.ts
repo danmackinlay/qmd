@@ -1,7 +1,7 @@
 import { isBun, openDatabase } from "../db.js";
 import type { Database, SQLiteValue } from "../db.js";
 import fastGlob from "fast-glob";
-import { execSync, spawn as nodeSpawn } from "child_process";
+import { spawn as nodeSpawn } from "child_process";
 import { fileURLToPath } from "url";
 import { basename, dirname, join as pathJoin, relative as relativePath, resolve as pathResolve } from "path";
 import { parseArgs } from "util";
@@ -88,6 +88,7 @@ import {
   escapeCSV,
   type OutputFormat,
 } from "./formatter.js";
+import { resolveCommit } from "./version.js";
 import {
   getCollection as getCollectionFromYaml,
   listCollections as yamlListCollections,
@@ -4012,16 +4013,13 @@ function readPackageJson(): PackageJson {
   return JSON.parse(readFileSync(pkgPath, "utf-8"));
 }
 
-async function showVersion(): Promise<void> {
+function showVersion(): void {
   const scriptDir = dirname(fileURLToPath(import.meta.url));
   const pkg = readPackageJson();
 
-  let commit = "";
-  try {
-    commit = execSync(`git -C ${scriptDir} rev-parse --short HEAD`, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
-  } catch {
-    // Not a git repo or git not available
-  }
+  // Prefer the commit stamped in at build time; fall back to the checkout's
+  // HEAD only when this really is qmd's own checkout. See src/cli/version.ts.
+  const commit = resolveCommit(scriptDir, pathResolve(scriptDir, "..", ".."));
 
   const versionStr = commit ? `${pkg.version} (${commit})` : pkg.version;
   console.log(`qmd ${versionStr}`);
@@ -4043,7 +4041,7 @@ if (isMain) {
   const cli = parseCLI();
 
   if (cli.values.version) {
-    await showVersion();
+    showVersion();
     process.exit(0);
   }
 
